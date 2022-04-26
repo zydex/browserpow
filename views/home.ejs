@@ -1,0 +1,52 @@
+<html>
+    <body>
+        <h1 id="status-label">Retrieving challenge...</h1>
+    </body>
+    <script>
+        const label = document.getElementById("status-label")
+        async function hash(data) {
+            const encoder = new TextEncoder();
+            const encoded = encoder.encode(data);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));                     // convert buffer to byte array
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return hashHex
+        }
+        function retrieveChallenge() {
+            fetch('/challenge')
+                .then(response => response.json())
+                .then(data => solveChallenge(JSON.parse(data)));
+        }
+        async function solveChallenge(data) {
+            var a = performance.now();
+            label.innerText = "Solving..."
+            const chall = data["challenge"]
+            var hashed = "default"
+            var nonce = 0
+            const diff = data["difficulty"]
+            while (hashed.substr(0,diff) !== "0".repeat(diff)) {
+                nonce += 1
+                hashed = await hash(chall + nonce.toString())
+            }
+            console.log(nonce)
+            console.log(hashed)
+            var b = performance.now();
+            const timeTaken = (Math.round(b - a) / 1000) + "s"
+            label.innerText = `Solved in ${timeTaken}: [Difficulty: ${diff}] [Nonce: ${nonce}]`
+            const response = await fetch('/verify', {
+                method: 'POST',
+                headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({hash: hashed, nonce: nonce, challenge: chall})
+            })
+            if (response.status == 200) {
+                label.innerText = label.innerText + "\nVerified by server."
+            } else {
+                label.innerText = label.innerText + "\nRejected by server."
+            }
+        }
+        retrieveChallenge()
+    </script>
+</html>
